@@ -1,18 +1,27 @@
 /**
  * Example: Build Settlement.settle() calldata from Solver API request/response.
  *
- * Demonstrates how to transform raw /solve API JSON into SDK types
- * and produce ABI-encoded calldata ready for on-chain submission.
+ * Demonstrates two scenarios:
+ * 1. Without interactions (empty [pre, swap, post])
+ * 2. With interactions (approve + DEX swap in swap phase)
+ *
+ * When interactions are provided, the SDK automatically:
+ * - Duplicates tokens: set(tradeTokens) + list(tradeTokens)
+ * - Sets clearingPrice = 0 for interaction token slots
+ * - Offsets trade token indices by tradeTokens.length
  *
  * Usage:
  *   pnpm build && node dist/build-calldata.js
  */
 
+import type { Interaction } from '@okx-intent-swap/sdk-common';
 import {
   buildSettleCalldata,
+  reconstructFromCalldata,
   type SolveRequest,
   type SolveResponse,
-} from '@okx-intent-swap/sdk';
+} from '@okx-intent-swap/sdk-solver';
+import { ethers } from 'ethers';
 
 // ============ Raw API Input (as received from /solve endpoint) ============
 
@@ -23,26 +32,26 @@ import {
  */
 const rawRequest = {
   chainIndex: 1,
-  auctionId: '16888616559291392',
-  deadline: 1772435845666,
+  auctionId: '16893382867594432',
+  deadline: 1782508573740,
   orders: [
     {
       orderUid:
-        '0x7651e48dfb187bfcd85c193a3fd4d044defdaa2cfdb48aff90b1b5d28885f0ec3474fbbc6e43dcb0398e2eacbe1032cced80674269a92d34',
+        '0x63f0b8c6a70542a89fb82eb5b46df3155915c9f5726f317a06a7dddcb06027a03474fbbc6e43dcb0398e2eacbe1032cced80674269aa4a0f',
       owner: '0x3474fbbc6e43dcb0398e2eacbe1032cced806742',
       fromTokenAddress: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
       toTokenAddress: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
       fromTokenAmount: '2000000000000000',
-      toTokenAmount: '3827335',
+      toTokenAmount: '3888371',
       swapMode: 'exactIn',
       partiallyFillable: false,
-      validTo: 1772694836,
+      validTo: 1772767759,
       appDataHash: '0xb44dd4943b8f671e3e555b6e0fb8a882fd4c81d2bf2fbe27bf2bc76794d6f1ce',
       signature:
-        '0x0fce841f6acd0ae9d16b621bc19b4f8424764278573f3cf026463b9a30ac46d34b44addf867e5f53dd342daaaf5a2ca26af56da42d40f2d2e99e58213f93f4f71c',
+        '0xb77e58fe3adcd5adc8f143b0ea88c894f5e027e47eb5f1b71eab080ef8c29a4d07ef908ebb9dbc3f9e3944a52d5fcde88584b34e9facf5794b0ea0be90ab69001c',
       signingScheme: 'eip712',
       receiver: '0x3474fbbc6e43dcb0398e2eacbe1032cced806742',
-      createTime: 1772435638,
+      createTime: 1772508560,
       commissionInfos: [
         {
           feePercent: '3000000',
@@ -73,7 +82,7 @@ const rawRequest = {
   ],
   tokens: [
     { address: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2', price: '3980.317435057675563497' },
-    { address: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48', price: '1' },
+    { address: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48', price: '0.99993' },
   ],
   settlementContract: '0x1a34e1e604d8a55405172c0717b17f7631d5f265',
 };
@@ -93,14 +102,14 @@ const rawResponse = {
         orders: [
           {
             orderUid:
-              '0x7651e48dfb187bfcd85c193a3fd4d044defdaa2cfdb48aff90b1b5d28885f0ec3474fbbc6e43dcb0398e2eacbe1032cced80674269a92d34',
+              '0x63f0b8c6a70542a89fb82eb5b46df3155915c9f5726f317a06a7dddcb06027a03474fbbc6e43dcb0398e2eacbe1032cced80674269aa4a0f',
             swapMode: 'exactIn',
             fromTokenAddress: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
             toTokenAddress: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
             fromTokenAmount: '2000000000000000',
-            toTokenAmount: '3827335',
+            toTokenAmount: '3888371',
             executedFromTokenAmount: '2000000000000000',
-            executedToTokenAmount: '3860897',
+            executedToTokenAmount: '3927733',
             solverFeeInfo: {
               feePercent: '0',
               feeAmount: '0',
@@ -136,7 +145,7 @@ const rawResponse = {
           },
         ],
         clearingPrices: {
-          '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48': '0.000000001939175082119537920642893019',
+          '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48': '0.000000001972743935208437970868910096',
           '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2': '1',
         },
         surplusFeeInfo: {
@@ -221,6 +230,49 @@ function toSolveResponse(raw: typeof rawResponse): SolveResponse {
   };
 }
 
+// ============ Interactions: Solver builds DEX swap calldata ============
+
+/**
+ * Builds solver interactions for the swap phase.
+ *
+ * A typical solver flow:
+ * 1. Approve DEX router to spend fromToken
+ * 2. Execute swap via DEX aggregator (WETH → USDC)
+ *
+ * The Settlement contract executes these during the swap phase,
+ * and tracks balance deltas for the interaction tokens.
+ */
+function buildSwapInteractions(
+  fromToken: string,
+  dexTokenApproveAddress: string,
+  dexAggregatorAddress: string,
+  dexSwapCalldata: string
+): Interaction[] {
+  const erc20Iface = new ethers.utils.Interface([
+    'function approve(address spender, uint256 amount)',
+  ]);
+
+  // Interaction 1: Approve DEX router to spend fromToken
+  const approveCalldata = erc20Iface.encodeFunctionData('approve', [
+    dexTokenApproveAddress,
+    ethers.constants.MaxUint256,
+  ]);
+
+  // Interaction 2: Execute DEX swap
+  return [
+    {
+      target: fromToken,
+      value: 0n,
+      callData: approveCalldata,
+    },
+    {
+      target: dexAggregatorAddress,
+      value: 0n,
+      callData: dexSwapCalldata,
+    },
+  ];
+}
+
 // ============ Main: build calldata and print results ============
 
 function main() {
@@ -229,72 +281,145 @@ function main() {
 
   console.log('--- Build Calldata Example ---\n');
 
-  // 1. Verify request transformation
+  // 1. Verify request/response transformation
   console.log('[Request]');
   console.log('  auctionId:', request.auctionId);
   console.log('  orders:', request.orders.length);
   console.log('  owner:', request.orders[0].owner);
   console.log('  commissions:', request.orders[0].commissionInfos.length);
-  request.orders[0].commissionInfos.forEach((ci, i) => {
+  request.orders[0].commissionInfos.forEach((ci: { commissionType: string; feePercent: string }, i: number) => {
     console.log(`    [${i}] ${ci.commissionType} → ${ci.feePercent} (1e9)`);
   });
 
-  // 2. Verify response transformation
   console.log('\n[Response]');
   console.log('  solutions:', response.solutions.length);
   console.log('  executedFrom:', response.solutions[0].orders[0].executedFromTokenAmount);
   console.log('  executedTo:', response.solutions[0].orders[0].executedToTokenAmount);
   console.log('  surplusReceiver:', response.solutions[0].surplusFeeInfo.trimReceiver);
 
-  // 3. Build calldata using API clearing prices
-  console.log('\n[Calldata - API Prices]');
-  const result = buildSettleCalldata(request, response);
+  // ============================================================
+  // Scenario 1: Without interactions (empty phases)
+  // ============================================================
+  console.log('\n========== Scenario 1: Without Interactions ==========');
 
-  console.log('  calldata:', result.calldata.slice(0, 66) + '...');
-  console.log('  settleId:', result.params.settleId.toString());
-  console.log('  tokens:', result.params.tokens);
-  console.log('  clearingPrices:', result.params.clearingPrices.map(String));
-  console.log('  trades:', result.params.trades.length);
-
-  const trade = result.params.trades[0];
-  console.log('  trade.fromTokenAddressIndex:', trade.fromTokenAddressIndex);
-  console.log('  trade.toTokenAddressIndex:', trade.toTokenAddressIndex);
-  console.log('  trade.owner:', trade.owner);
-  console.log('  trade.receiver:', trade.receiver);
-  console.log('  trade.fromTokenAmount:', trade.fromTokenAmount.toString());
-  console.log('  trade.toTokenAmount:', trade.toTokenAmount.toString());
-  console.log('  trade.executedAmount:', trade.executedAmount.toString());
-  console.log('  trade.commissions:', trade.commissionInfos.length);
-  trade.commissionInfos.forEach((ci, i) => {
-    console.log(`    [${i}] feePercent=${ci.feePercent} receiver=${ci.referrerWalletAddress}`);
+  const result1 = buildSettleCalldata(request, response, {
+    interactions: [[], [], []],
+    useComputedPrices: true,
   });
-  console.log('  trade.solverFee:', trade.solverFeeInfo.feePercent.toString());
-  console.log('  surplusFee:', result.params.surplusFeeInfo.feePercent.toString());
 
-  // 4. Build calldata using computed clearing prices
-  console.log('\n[Calldata - Computed Prices]');
-  const resultComputed = buildSettleCalldata(request, response, { useComputedPrices: true });
+  console.log('  tokens count:', result1.params.tokens.length);
+  console.log('  tokens:', result1.params.tokens);
+  console.log('  clearingPrices:', result1.params.clearingPrices.map(String));
+  console.log('  trade.fromTokenAddressIndex:', result1.params.trades[0].fromTokenAddressIndex);
+  console.log('  trade.toTokenAddressIndex:', result1.params.trades[0].toTokenAddressIndex);
+  console.log('  calldata:', result1.calldata.slice(0, 66) + '...');
 
-  console.log('  calldata:', resultComputed.calldata.slice(0, 66) + '...');
-  console.log('  clearingPrices:', resultComputed.params.clearingPrices.map(String));
+  // Verify: tokens = [WETH, USDC], prices = [P_s, P_b], indices = [0, 1]
+  const expectedPriceSell = 3927733n;
+  const expectedPriceBuy = 2000000000000000n - 9000000000000n; // 1991000000000000
+  console.log('  P_s match:', result1.params.clearingPrices[0] === expectedPriceSell ? '✅' : '❌');
+  console.log('  P_b match:', result1.params.clearingPrices[1] === expectedPriceBuy ? '✅' : '❌');
 
-  // Verify computed prices match expected values
-  // fromToken fees: 0.3% + 0.1% + 0.05% = 0.45% total
-  // total fromTokenFee = 6000000000000 + 2000000000000 + 1000000000000 = 9000000000000
-  const expectedFromFee = 6000000000000n + 2000000000000n + 1000000000000n;
-  const expectedPriceSell = 3860897n; // P_s = executedToTokenAmount
-  const expectedPriceBuy = 2000000000000000n - expectedFromFee; // P_b = executedFromTokenAmount - fee
+  // Cross-verification: calldata → reconstructFromCalldata → compare with original request/response
+  console.log('\n  --- Cross-Verification (Scenario 1) ---');
+  const recon1 = reconstructFromCalldata(result1.calldata);
+  const reqOrder0 = request.orders[0];
+  const reconReqOrder0 = recon1.request.orders[0];
+  const resOrder0 = response.solutions[0].orders[0];
+  const reconResOrder0 = recon1.response.solutions[0].orders[0];
+  console.log('  auctionId match:',
+    recon1.request.auctionId === request.auctionId ? '✅' : '❌');
+  console.log('  fromTokenAddress match:',
+    reconReqOrder0.fromTokenAddress.toLowerCase() === reqOrder0.fromTokenAddress.toLowerCase() ? '✅' : '❌');
+  console.log('  toTokenAddress match:',
+    reconReqOrder0.toTokenAddress.toLowerCase() === reqOrder0.toTokenAddress.toLowerCase() ? '✅' : '❌');
+  console.log('  owner match:',
+    reconReqOrder0.owner.toLowerCase() === reqOrder0.owner.toLowerCase() ? '✅' : '❌');
+  console.log('  receiver match:',
+    reconReqOrder0.receiver.toLowerCase() === reqOrder0.receiver.toLowerCase() ? '✅' : '❌');
+  console.log('  fromTokenAmount match:',
+    reconReqOrder0.fromTokenAmount === reqOrder0.fromTokenAmount ? '✅' : '❌');
+  console.log('  toTokenAmount match:',
+    reconReqOrder0.toTokenAmount === reqOrder0.toTokenAmount ? '✅' : '❌');
+  console.log('  swapMode match:',
+    reconReqOrder0.swapMode === reqOrder0.swapMode ? '✅' : '❌');
+  console.log('  signingScheme match:',
+    reconReqOrder0.signingScheme === reqOrder0.signingScheme ? '✅' : '❌');
+  console.log('  executedFromTokenAmount match:',
+    reconResOrder0.executedFromTokenAmount === resOrder0.executedFromTokenAmount ? '✅' : '❌');
+  console.log('  executedToTokenAmount match:',
+    reconResOrder0.executedToTokenAmount === resOrder0.executedToTokenAmount ? '✅' : '❌');
+  console.log('  commissionInfos match:',
+    reconReqOrder0.commissionInfos.every((ci, i) =>
+      ci.feePercent === reqOrder0.commissionInfos[i].feePercent &&
+      ci.feeDirection === reqOrder0.commissionInfos[i].feeDirection &&
+      ci.toB === reqOrder0.commissionInfos[i].toB &&
+      ci.commissionType === reqOrder0.commissionInfos[i].commissionType
+    ) ? '✅' : '❌');
+  // Reverse: re-encode from reconstructed data, verify calldata matches
+  const reEncoded1 = buildSettleCalldata(recon1.request, recon1.response, {
+    interactions: recon1.interactions,
+    useComputedPrices: false,
+  });
+  console.log('  re-encode calldata match:',
+    reEncoded1.calldata === result1.calldata ? '✅' : '❌');
 
-  console.log('  expected P_s (WETH):', expectedPriceSell.toString());
-  console.log('  expected P_b (USDC):', expectedPriceBuy.toString());
-  console.log(
-    '  P_s match:',
-    resultComputed.params.clearingPrices[0] === expectedPriceSell ? '✅' : '❌'
-  );
-  console.log(
-    '  P_b match:',
-    resultComputed.params.clearingPrices[1] === expectedPriceBuy ? '✅' : '❌'
-  );
+  // ============================================================
+  // Scenario 2: With interactions (approve + DEX swap)
+  // ============================================================
+  console.log('\n========== Scenario 2: With Interactions ==========');
+
+  // Solver constructs DEX swap interactions
+  // (In production, dexSwapCalldata comes from the solver's routing engine)
+  const DEX_TOKEN_APPROVE_ADDRESS = '0xffb8322deeeadf0d61589211493fb2dc668d3cc0';
+  const DEX_AGGREGATOR = '0xDcB7028E5EAA1d7bB82B7152Cb0e7adC12e7457c';
+  const WETH = rawRequest.orders[0].fromTokenAddress;
+
+  // Placeholder DEX swap calldata (in production, this is the actual aggregator call)
+  const dexSwapCalldata = '0xf2c42696' + '00'.repeat(32); // simplified for example
+
+  const swapInteractions = buildSwapInteractions(WETH, DEX_TOKEN_APPROVE_ADDRESS, DEX_AGGREGATOR, dexSwapCalldata);
+
+  const result2 = buildSettleCalldata(request, response, {
+    interactions: [[], swapInteractions, []], // [pre=empty, swap=approve+dex, post=empty]
+    useComputedPrices: true,
+  });
+
+  console.log('  tokens count:', result2.params.tokens.length, '(2 interaction + 2 trade)');
+  console.log('  tokens:', result2.params.tokens);
+  console.log('  clearingPrices:', result2.params.clearingPrices.map(String));
+  console.log('  trade.fromTokenAddressIndex:', result2.params.trades[0].fromTokenAddressIndex);
+  console.log('  trade.toTokenAddressIndex:', result2.params.trades[0].toTokenAddressIndex);
+  console.log('  interactions[swap]:', result2.params.interactions[1].length, 'interactions');
+  console.log('  calldata:', result2.calldata.slice(0, 66) + '...');
+
+  // Verify: tokens = [WETH, USDC, WETH, USDC]
+  //   prices = [0, 0, P_s, P_b]
+  //   indices = [2, 3] (offset by 2)
+  console.log('  interaction prices are 0:',
+    result2.params.clearingPrices[0] === 0n && result2.params.clearingPrices[1] === 0n ? '✅' : '❌');
+  console.log('  trade prices correct:',
+    result2.params.clearingPrices[2] === expectedPriceSell &&
+    result2.params.clearingPrices[3] === expectedPriceBuy ? '✅' : '❌');
+  console.log('  trade indices offset by 2:',
+    result2.params.trades[0].fromTokenAddressIndex === 2 &&
+    result2.params.trades[0].toTokenAddressIndex === 3 ? '✅' : '❌');
+
+  // Cross-verification: calldata → reconstructFromCalldata → re-encode → compare
+  console.log('\n  --- Cross-Verification (Scenario 2) ---');
+  const recon2 = reconstructFromCalldata(result2.calldata);
+  console.log('  interactions[swap] count match:',
+    recon2.interactions[1].length === result2.params.interactions[1].length ? '✅' : '❌');
+  console.log('  interaction[swap][0].target match:',
+    recon2.interactions[1][0]?.target.toLowerCase() === result2.params.interactions[1][0]?.target.toLowerCase() ? '✅' : '❌');
+  console.log('  executedToTokenAmount match:',
+    recon2.response.solutions[0].orders[0].executedToTokenAmount === resOrder0.executedToTokenAmount ? '✅' : '❌');
+  const reEncoded2 = buildSettleCalldata(recon2.request, recon2.response, {
+    interactions: recon2.interactions,
+    useComputedPrices: false,
+  });
+  console.log('  re-encode calldata match:',
+    reEncoded2.calldata === result2.calldata ? '✅' : '❌');
 
   console.log('\n✅ Build calldata example completed');
 }

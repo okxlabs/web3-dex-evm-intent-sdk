@@ -8,9 +8,9 @@
 import { ethers } from 'ethers';
 import { SETTLEMENT_ABI } from '@okx-intent-swap/sdk-contracts';
 import { COMMISSION_DENOM } from '@okx-intent-swap/sdk-common';
-import { buildSettleCalldata } from '../calldata-builder';
-import type { SolveRequest, SolveResponse } from '../types';
-import { LABEL_OKX, LABEL_CHILD, LABEL_PARENT } from '../constants';
+import { buildSettleCalldata } from '../calldata-builder.js';
+import type { SolveRequest, SolveResponse } from '../types.js';
+import { LABEL_OKX, LABEL_CHILD, LABEL_PARENT } from '../constants.js';
 
 // ============ Raw API Data ============
 
@@ -234,7 +234,7 @@ describe('E2E: real API data → calldata', () => {
   });
 
   it('should encode clearing prices correctly from decimal strings', () => {
-    const result = buildSettleCalldata(request, response);
+    const result = buildSettleCalldata(request, response, { useComputedPrices: false });
 
     // WETH = "1", USDC = "0.000000001939175082119537920642893019" (36 decimal places)
     // Scale by 10^36: WETH = 1 * 10^36, USDC = 1_939_175_082_119_537_920_642_893_019
@@ -313,8 +313,8 @@ describe('E2E: real API data → calldata', () => {
   });
 
   it('should produce identical calldata length for both price modes', () => {
-    const resultApi = buildSettleCalldata(request, response);
-    const resultComputed = buildSettleCalldata(request, response, { useComputedPrices: true });
+    const resultApi = buildSettleCalldata(request, response, { useComputedPrices: false });
+    const resultComputed = buildSettleCalldata(request, response);
 
     // Calldata structure is the same, only clearing price values differ
     expect(resultApi.calldata.length).toBe(resultComputed.calldata.length);

@@ -14,7 +14,7 @@ export type {
   ApiSurplusFeeInfo,
   ClearingPrices,
   Solution,
-} from './types';
+} from './types.js';
 
 // Constants
 export {
@@ -22,7 +22,7 @@ export {
   SolverFeeFlags,
   SIGNING_SCHEME_MAP,
   ADDRESS_ZERO,
-} from './constants';
+} from './constants.js';
 
 // Converters
 export {
@@ -36,9 +36,13 @@ export {
   buildTokenIndexMap,
   computeCustomPrices,
   buildClearingPricesFromCustomPrices,
-} from './converters';
-export type { CustomPriceResult, OrderCustomPrice } from './converters';
+} from './converters.js';
+export type { CustomPriceResult, OrderCustomPrice } from './converters.js';
 
 // Calldata builder (core)
-export type { BuildSettleCalldataOptions, BuildSettleCalldataResult } from './calldata-builder';
-export { buildSettleCalldata } from './calldata-builder';
+export type { BuildSettleCalldataOptions, BuildSettleCalldataResult, DecodeSettleCalldataResult } from './calldata-builder.js';
+export { buildSettleCalldata, decodeSettleCalldata } from './calldata-builder.js';
+
+// Calldata decoder (reverse: calldata → request/response)
+export type { ReconstructFromCalldataResult } from './calldata-decoder.js';
+export { reconstructFromCalldata, unpackCommissionFlag, unpackSolverFeeFlag } from './calldata-decoder.js';

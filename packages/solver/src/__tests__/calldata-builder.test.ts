@@ -7,7 +7,7 @@
 import { ethers } from 'ethers';
 import { SETTLEMENT_ABI } from '@okx-intent-swap/sdk-contracts';
 import { CommissionFlags, COMMISSION_DENOM, OrderKind, encodeTradeFlags } from '@okx-intent-swap/sdk-common';
-import type { SolveRequest, SolveResponse } from '../types';
+import type { SolveRequest, SolveResponse } from '../types.js';
 import {
   packCommissionFlag,
   convertApiCommissionInfo,
@@ -19,10 +19,10 @@ import {
   buildTradeFromSolveOrders,
   computeCustomPrices,
   buildClearingPricesFromCustomPrices,
-} from '../converters';
-import type { OrderCustomPrice } from '../converters';
-import { buildSettleCalldata } from '../calldata-builder';
-import { LABEL_OKX, LABEL_PARENT, LABEL_CHILD, SolverFeeFlags, ADDRESS_ZERO } from '../constants';
+} from '../converters.js';
+import type { OrderCustomPrice } from '../converters.js';
+import { buildSettleCalldata } from '../calldata-builder.js';
+import { LABEL_OKX, LABEL_PARENT, LABEL_CHILD, SolverFeeFlags, ADDRESS_ZERO } from '../constants.js';
 
 // ============ Test Data ============
 
@@ -476,7 +476,7 @@ describe('buildSettleCalldata', () => {
   };
 
   it('should produce valid calldata that can be decoded', () => {
-    const result = buildSettleCalldata(sampleRequest, sampleResponse);
+    const result = buildSettleCalldata(sampleRequest, sampleResponse, { useComputedPrices: false });
     const { calldata } = result;
 
     expect(calldata).toMatch(/^0x/);
@@ -585,7 +585,7 @@ describe('buildSettleCalldata', () => {
       ],
     };
 
-    const result = buildSettleCalldata(request, response);
+    const result = buildSettleCalldata(request, response, { useComputedPrices: false });
 
     // Verify clearing prices were scaled correctly
     // maxDecimals = 12, so USDC = 1 * 10^12 = 1000000000000, WETH = 1939
@@ -681,6 +681,7 @@ describe('buildSettleCalldata', () => {
 
     const result = buildSettleCalldata(sampleRequest, multiSolutionResponse, {
       solutionIndex: 1,
+      useComputedPrices: false,
     });
 
     // Should use solution[1] prices
@@ -760,7 +761,7 @@ describe('buildSettleCalldata trade sorting by toTokenAddressIndex', () => {
       ],
     };
 
-    const result = buildSettleCalldata(request, response);
+    const result = buildSettleCalldata(request, response, { useComputedPrices: false });
 
     // Trades must be sorted: toTokenAddressIndex ascending
     expect(result.params.trades.length).toBe(2);

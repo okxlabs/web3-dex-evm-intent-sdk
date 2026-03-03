@@ -1,26 +1,22 @@
 {
-  "name": "@okx-intent-swap/example-nodejs-ethers5",
+  "name": "@okx-intent-swap/example-build-calldata",
   "version": "1.0.0",
   "private": true,
-  "description": "Node.js example using IntentSwap SDK with ethers v5",
-  "main": "./dist/index.js",
+  "description": "Example: build Settlement.settle() calldata from Solver API data",
   "type": "module",
   "scripts": {
     "build": "tsc",
-    "start": "node dist/index.js",
-    "dev": "ts-node src/index.ts",
-    "e2e:anvil": "node dist/e2e-settle.js",
-    "e2e:staging": "node dist/e2e-staging.js",
-    "build-calldata": "node dist/build-calldata.js"
+    "build-calldata": "node dist/build-calldata.js",
+    "decode-calldata": "node dist/decode-calldata.js",
+    "reconstruct-from-calldata": "node dist/reconstruct-from-calldata.js"
   },
   "dependencies": {
-    "@okx-intent-swap/sdk": "workspace:*",
-    "dotenv": "^16.4.0",
-    "ethers": "^5.7.0"
+    "@okx-intent-swap/sdk-solver": "workspace:*",
+    "@okx-intent-swap/sdk-contracts": "workspace:*",
+    "@okx-intent-swap/sdk-common": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",
-    "ts-node": "^10.9.0",
     "typescript": "^5.3.0"
   }
 }
