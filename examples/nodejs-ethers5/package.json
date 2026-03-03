@@ -10,7 +10,8 @@
     "start": "node dist/index.js",
     "dev": "ts-node src/index.ts",
     "e2e:anvil": "node dist/e2e-settle.js",
-    "e2e:staging": "node dist/e2e-staging.js"
+    "e2e:staging": "node dist/e2e-staging.js",
+    "build-calldata": "node dist/build-calldata.js"
   },
   "dependencies": {
     "@okx-intent-swap/sdk": "workspace:*",

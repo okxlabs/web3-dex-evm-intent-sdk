@@ -1,15 +1,18 @@
 /**
- * Example: Build Settlement.settle() calldata from real Solver API request/response.
+ * Example: Build Settlement.settle() calldata from Solver API request/response.
  *
- * This example demonstrates how to transform raw API JSON into SDK types
+ * Demonstrates how to transform raw /solve API JSON into SDK types
  * and produce ABI-encoded calldata ready for on-chain submission.
  *
  * Usage:
- *   cd sdk && npx jest --testPathPattern=examples/build-calldata-example
+ *   pnpm build && node dist/build-calldata.js
  */
 
-import { buildSettleCalldata } from '../src/calldata-builder';
-import type { SolveRequest, SolveResponse } from '../src/types';
+import {
+  buildSettleCalldata,
+  type SolveRequest,
+  type SolveResponse,
+} from '@okx-intent-swap/sdk';
 
 // ============ Raw API Input (as received from /solve endpoint) ============
 
@@ -218,96 +221,82 @@ function toSolveResponse(raw: typeof rawResponse): SolveResponse {
   };
 }
 
-// ============ Test: verify the full pipeline ============
+// ============ Main: build calldata and print results ============
 
-describe('build-calldata-example: real API data end-to-end', () => {
+function main() {
   const request = toSolveRequest(rawRequest);
   const response = toSolveResponse(rawResponse);
 
-  it('should transform raw request to SDK type correctly', () => {
-    expect(request.auctionId).toBe('16888616559291392');
-    expect(request.orders).toHaveLength(1);
-    expect(request.orders[0].owner).toBe('0x3474fbbc6e43dcb0398e2eacbe1032cced806742');
-    expect(request.orders[0].commissionInfos).toHaveLength(3);
-    expect(request.orders[0].commissionInfos[0].commissionType).toBe('okx');
-    expect(request.orders[0].commissionInfos[1].commissionType).toBe('child');
-    expect(request.orders[0].commissionInfos[2].commissionType).toBe('parent');
+  console.log('--- Build Calldata Example ---\n');
+
+  // 1. Verify request transformation
+  console.log('[Request]');
+  console.log('  auctionId:', request.auctionId);
+  console.log('  orders:', request.orders.length);
+  console.log('  owner:', request.orders[0].owner);
+  console.log('  commissions:', request.orders[0].commissionInfos.length);
+  request.orders[0].commissionInfos.forEach((ci, i) => {
+    console.log(`    [${i}] ${ci.commissionType} → ${ci.feePercent} (1e9)`);
   });
 
-  it('should transform raw response to SDK type correctly', () => {
-    expect(response.solutions).toHaveLength(1);
-    expect(response.solutions[0].orders).toHaveLength(1);
-    expect(response.solutions[0].orders[0].executedFromTokenAmount).toBe('2000000000000000');
-    expect(response.solutions[0].orders[0].executedToTokenAmount).toBe('3860897');
-    expect(response.solutions[0].surplusFeeInfo.trimReceiver).toBe(
-      '0xaFe9d55A5a4e90bBBabBa0327BF72196B5683596'
-    );
+  // 2. Verify response transformation
+  console.log('\n[Response]');
+  console.log('  solutions:', response.solutions.length);
+  console.log('  executedFrom:', response.solutions[0].orders[0].executedFromTokenAmount);
+  console.log('  executedTo:', response.solutions[0].orders[0].executedToTokenAmount);
+  console.log('  surplusReceiver:', response.solutions[0].surplusFeeInfo.trimReceiver);
+
+  // 3. Build calldata using API clearing prices
+  console.log('\n[Calldata - API Prices]');
+  const result = buildSettleCalldata(request, response);
+
+  console.log('  calldata:', result.calldata.slice(0, 66) + '...');
+  console.log('  settleId:', result.params.settleId.toString());
+  console.log('  tokens:', result.params.tokens);
+  console.log('  clearingPrices:', result.params.clearingPrices.map(String));
+  console.log('  trades:', result.params.trades.length);
+
+  const trade = result.params.trades[0];
+  console.log('  trade.fromTokenAddressIndex:', trade.fromTokenAddressIndex);
+  console.log('  trade.toTokenAddressIndex:', trade.toTokenAddressIndex);
+  console.log('  trade.owner:', trade.owner);
+  console.log('  trade.receiver:', trade.receiver);
+  console.log('  trade.fromTokenAmount:', trade.fromTokenAmount.toString());
+  console.log('  trade.toTokenAmount:', trade.toTokenAmount.toString());
+  console.log('  trade.executedAmount:', trade.executedAmount.toString());
+  console.log('  trade.commissions:', trade.commissionInfos.length);
+  trade.commissionInfos.forEach((ci, i) => {
+    console.log(`    [${i}] feePercent=${ci.feePercent} receiver=${ci.referrerWalletAddress}`);
   });
+  console.log('  trade.solverFee:', trade.solverFeeInfo.feePercent.toString());
+  console.log('  surplusFee:', result.params.surplusFeeInfo.feePercent.toString());
 
-  it('should build valid calldata using API clearing prices', () => {
-    const result = buildSettleCalldata(request, response);
+  // 4. Build calldata using computed clearing prices
+  console.log('\n[Calldata - Computed Prices]');
+  const resultComputed = buildSettleCalldata(request, response, { useComputedPrices: true });
 
-    // Verify basic structure
-    expect(result.calldata).toMatch(/^0x/);
-    expect(result.params.settleId).toBe(16888616559291392n);
-    expect(result.params.tokens).toHaveLength(2);
+  console.log('  calldata:', resultComputed.calldata.slice(0, 66) + '...');
+  console.log('  clearingPrices:', resultComputed.params.clearingPrices.map(String));
 
-    // Tokens: WETH first (from), USDC second (to) — insertion order
-    expect(result.params.tokens[0]).toBe('0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2');
-    expect(result.params.tokens[1]).toBe('0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48');
+  // Verify computed prices match expected values
+  // fromToken fees: 0.3% + 0.1% + 0.05% = 0.45% total
+  // total fromTokenFee = 6000000000000 + 2000000000000 + 1000000000000 = 9000000000000
+  const expectedFromFee = 6000000000000n + 2000000000000n + 1000000000000n;
+  const expectedPriceSell = 3860897n; // P_s = executedToTokenAmount
+  const expectedPriceBuy = 2000000000000000n - expectedFromFee; // P_b = executedFromTokenAmount - fee
 
-    // Clearing prices scaled from decimal strings
-    // WETH = "1", USDC = "0.000000001939175082119537920642893019"
-    // maxDecimals = 33, WETH = 1 * 10^33, USDC = 1939175082119537920642893019
-    expect(result.params.clearingPrices).toHaveLength(2);
-    expect(result.params.clearingPrices[0]).toBeGreaterThan(0n); // WETH
-    expect(result.params.clearingPrices[1]).toBeGreaterThan(0n); // USDC
+  console.log('  expected P_s (WETH):', expectedPriceSell.toString());
+  console.log('  expected P_b (USDC):', expectedPriceBuy.toString());
+  console.log(
+    '  P_s match:',
+    resultComputed.params.clearingPrices[0] === expectedPriceSell ? '✅' : '❌'
+  );
+  console.log(
+    '  P_b match:',
+    resultComputed.params.clearingPrices[1] === expectedPriceBuy ? '✅' : '❌'
+  );
 
-    // Trade
-    expect(result.params.trades).toHaveLength(1);
-    const trade = result.params.trades[0];
-    expect(trade.fromTokenAddressIndex).toBe(0); // WETH
-    expect(trade.toTokenAddressIndex).toBe(1);   // USDC
-    expect(trade.owner).toBe('0x3474fbbc6e43dcb0398e2eacbe1032cced806742');
-    // receiver === owner → address(0)
-    expect(trade.receiver).toBe('0x0000000000000000000000000000000000000000');
-    expect(trade.fromTokenAmount).toBe(2000000000000000n);
-    expect(trade.toTokenAmount).toBe(3827335n);
-    // exactIn → executedAmount = executedFromTokenAmount
-    expect(trade.executedAmount).toBe(2000000000000000n);
+  console.log('\n✅ Build calldata example completed');
+}
 
-    // 3 commission entries with correct flags
-    expect(trade.commissionInfos).toHaveLength(3);
-    expect(trade.commissionInfos[0].feePercent).toBe(3000000n);  // okx 0.3%
-    expect(trade.commissionInfos[1].feePercent).toBe(1000000n);  // child 0.1%
-    expect(trade.commissionInfos[2].feePercent).toBe(500000n);   // parent 0.05%
-
-    // Solver fee = 0
-    expect(trade.solverFeeInfo.feePercent).toBe(0n);
-    expect(trade.solverFeeInfo.solverAddr).toBe('0xaFe9d55A5a4e90bBBabBa0327BF72196B5683596');
-
-    // Surplus fee
-    expect(result.params.surplusFeeInfo.feePercent).toBe(0n);
-    expect(result.params.surplusFeeInfo.trimReceiver).toBe('0xaFe9d55A5a4e90bBBabBa0327BF72196B5683596');
-  });
-
-  it('should build valid calldata using computed clearing prices', () => {
-    const result = buildSettleCalldata(request, response, { useComputedPrices: true });
-
-    expect(result.calldata).toMatch(/^0x/);
-
-    // eS = 2000000000000000, eB = 3860897
-    // fromToken fees: 0.3% + 0.1% + 0.05% = 0.45% total
-    // commission fee = floor(2000000000000000 * 3000000 / 1e9) = 6000000000000
-    //                + floor(2000000000000000 * 1000000 / 1e9) = 2000000000000
-    //                + floor(2000000000000000 * 500000 / 1e9)  = 1000000000000
-    // solver fee = 0
-    // total fromTokenFee = 9000000000000
-    const expectedFromFee = 6000000000000n + 2000000000000n + 1000000000000n;
-
-    // P_s (WETH slot) = eB = 3860897
-    expect(result.params.clearingPrices[0]).toBe(3860897n);
-    // P_b (USDC slot) = eS - fromTokenFee = 2000000000000000 - 9000000000000 = 1991000000000000
-    expect(result.params.clearingPrices[1]).toBe(2000000000000000n - expectedFromFee);
-  });
-});
+main();
