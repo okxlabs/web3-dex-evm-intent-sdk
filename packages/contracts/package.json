@@ -1,6 +1,7 @@
 {
   "name": "@okx-intent-swap/sdk-contracts",
   "version": "1.0.0",
+  "type": "module",
   "description": "Contract ABIs and TypeScript bindings for IntentSwap SDK",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -19,12 +20,9 @@
     "typecheck": "tsc --noEmit",
     "test": "jest --passWithNoTests"
   },
-  "dependencies": {
-    "@okx-intent-swap/sdk-common": "workspace:*",
-    "@okx-intent-swap/sdk-config": "workspace:*"
-  },
+  "dependencies": {},
   "devDependencies": {
     "typescript": "^5.3.0"
   },
-  "license": "LGPL-3.0-or-later"
+  "license": "MIT"
 }

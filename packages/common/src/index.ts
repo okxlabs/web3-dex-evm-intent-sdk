@@ -16,9 +16,9 @@ export type {
   Interaction,
   Transfer,
   SurplusFeeInfo,
-} from './types';
+} from './types.js';
 
-export { OrderKind, SigningScheme, CommissionFlags, ORDER_KIND_HASH } from './types';
+export { OrderKind, SigningScheme, CommissionFlags, ORDER_KIND_HASH } from './types.js';
 
 // Constants
 export {
@@ -39,7 +39,7 @@ export {
   LABEL_OKX,
   LABEL_PARENT,
   LABEL_CHILD,
-} from './constants';
+} from './constants.js';
 
 // Utilities
 export {
@@ -59,17 +59,4 @@ export {
   normalizeAddress,
   isOrderExpired,
   getCurrentTimestamp,
-} from './utils';
-
-// Adapter
-export type {
-  TypedDataDomain,
-  TypedDataField,
-  TransactionRequest,
-  TransactionResponse,
-  TransactionReceipt,
-  Log,
-  Adapter,
-} from './adapter';
-
-export { setGlobalAdapter, getGlobalAdapter, clearGlobalAdapter } from './adapter';
+} from './utils.js';

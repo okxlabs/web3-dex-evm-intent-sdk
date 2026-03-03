@@ -14,14 +14,14 @@ import type {
   SolveRequestOrder,
   SolveResponseOrder,
   ClearingPrices,
-} from './types';
+} from './types.js';
 import {
   CommissionFlags,
   COMMISSION_TYPE_LABEL_MAP,
   SolverFeeFlags,
   SIGNING_SCHEME_MAP,
   ADDRESS_ZERO,
-} from './constants';
+} from './constants.js';
 
 // ============ Commission Flag Packing ============
 

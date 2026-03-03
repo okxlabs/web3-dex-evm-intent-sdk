@@ -15,9 +15,9 @@ import {
   validateOrder,
   isOrderExpired,
   getCurrentTimestamp,
-} from '../utils';
-import { OrderKind, SigningScheme } from '../types';
-import { RECEIVER_SAME_AS_OWNER, ORDER_UID_LENGTH, ZERO_BYTES32 } from '../constants';
+} from '../utils.js';
+import { OrderKind, SigningScheme } from '../types.js';
+import { RECEIVER_SAME_AS_OWNER, ORDER_UID_LENGTH, ZERO_BYTES32 } from '../constants.js';
 
 describe('packOrderUid', () => {
   it('should pack order UID correctly', () => {

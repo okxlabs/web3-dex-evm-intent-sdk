@@ -8,6 +8,6 @@ export {
   SETTLEMENT_ABI,
   ALLOW_LIST_AUTHENTICATION_ABI,
   ERC20_ABI,
-} from './abis';
+} from './abis/index.js';
 
-export type { SettlementABI, AllowListAuthenticationABI, ERC20ABI } from './abis';
+export type { SettlementABI, AllowListAuthenticationABI, ERC20ABI } from './abis/index.js';

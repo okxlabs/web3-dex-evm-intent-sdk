@@ -4,7 +4,7 @@
  *
  * To regenerate: run `forge build` then copy the abi from out/Settlement.sol/Settlement.json
  */
-import SettlementAbiJson from './Settlement.abi.json';
+import SettlementAbiJson from './Settlement.abi.json' with { type: 'json' };
 
 export const SETTLEMENT_ABI = SettlementAbiJson;
 

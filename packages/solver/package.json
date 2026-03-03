@@ -1,6 +1,7 @@
 {
   "name": "@okx-intent-swap/sdk-solver",
   "version": "1.0.0",
+  "type": "module",
   "description": "Solver SDK for assembling Settlement.settle() calldata from /solve API responses",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -31,5 +32,5 @@
     "ethers": "^5.7.0",
     "typescript": "^5.3.0"
   },
-  "license": "LGPL-3.0-or-later"
+  "license": "MIT"
 }

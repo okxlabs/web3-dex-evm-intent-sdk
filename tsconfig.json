@@ -1,18 +1,13 @@
 {
   "compilerOptions": {
     "target": "ES2020",
-    "module": "ESNext",
-    "moduleResolution": "bundler",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
     "baseUrl": ".",
     "paths": {
       "@okx-intent-swap/sdk-common": ["packages/common/src/index.ts"],
-      "@okx-intent-swap/sdk-config": ["packages/config/src/index.ts"],
       "@okx-intent-swap/sdk-contracts": ["packages/contracts/src/index.ts"],
-      "@okx-intent-swap/sdk-order-signing": ["packages/order-signing/src/index.ts"],
-      "@okx-intent-swap/sdk-ethers-v5-adapter": ["packages/providers/ethers-v5-adapter/src/index.ts"],
-      "@okx-intent-swap/sdk-trading": ["packages/trading/src/index.ts"],
-      "@okx-intent-swap/sdk-solver": ["packages/solver/src/index.ts"],
-      "@okx-intent-swap/sdk": ["packages/sdk/src/index.ts"]
+      "@okx-intent-swap/sdk-solver": ["packages/solver/src/index.ts"]
     },
     "lib": ["ES2020"],
     "declaration": true,

@@ -1,216 +1,194 @@
 # OKX Intent Swap SDK
 
-TypeScript SDK for interacting with the OKX Intent Swap DEX protocol.
-
-## Overview
-
-The OKX Intent Swap SDK provides tools for:
-
-- Creating and signing orders using EIP-712 typed data (domain: `OKX Intent Swap` v1.0.0)
-- Managing order UIDs and signatures
-- Interacting with the Settlement contract
-- Supporting multiple signing schemes (EIP-712, eth_sign, EIP-1271, PreSign)
+TypeScript SDK for building `Settlement.settle()` calldata — converts Solver API `/solve` request + response into ABI-encoded calldata ready for on-chain submission.
 
 ## Installation
 
 ```bash
-pnpm add @intentswap/sdk ethers@^5.7.0
-```
-
-Or install individual packages:
-
-```bash
-pnpm add @intentswap/sdk-common
-pnpm add @intentswap/sdk-config
-pnpm add @intentswap/sdk-order-signing
-pnpm add @intentswap/sdk-trading
-pnpm add @intentswap/sdk-ethers-v5-adapter
-```
-
-## Quick Start
-
-```typescript
-import { TradingSdk, EthersV5Adapter, OrderKind, SupportedChainId } from '@intentswap/sdk';
-import { ethers } from 'ethers';
-
-// Setup
-const provider = new ethers.providers.JsonRpcProvider('YOUR_RPC_URL');
-const wallet = new ethers.Wallet('YOUR_PRIVATE_KEY', provider);
-
-const adapter = new EthersV5Adapter({ provider, signer: wallet });
-const sdk = new TradingSdk(
-  {
-    chainId: SupportedChainId.MAINNET,
-    appCode: 'my-app',
-  },
-  adapter
-);
-
-// Create and sign an order
-const signedOrder = await sdk.createOrder({
-  swapMode: OrderKind.EXACT_IN,
-  fromTokenAddress: '0x...', // Token to sell
-  toTokenAddress: '0x...', // Token to buy
-  fromTokenAmount: ethers.utils.parseEther('1').toBigInt(),
-  toTokenAmount: ethers.utils.parseUnits('1000', 6).toBigInt(),
-});
-
-console.log('Order UID:', signedOrder.uid);
-console.log('Signature:', signedOrder.signature);
+pnpm add @okx-intent-swap/sdk-solver ethers@^5.7.0
 ```
 
 ## Packages
 
 | Package | Description |
 | ------- | ----------- |
-| `@intentswap/sdk` | Complete SDK (re-exports all packages) |
-| `@intentswap/sdk-common` | Core types, constants, and utilities |
-| `@intentswap/sdk-config` | Chain configuration and contract addresses |
-| `@intentswap/sdk-contracts` | Contract ABIs and TypeScript bindings |
-| `@intentswap/sdk-order-signing` | EIP-712 order signing utilities |
-| `@intentswap/sdk-trading` | High-level trading SDK |
-| `@intentswap/sdk-ethers-v5-adapter` | Ethers v5 adapter |
+| `@okx-intent-swap/sdk-solver` | Solver calldata builder (`buildSettleCalldata`) |
+| `@okx-intent-swap/sdk-common` | Core types, constants, and utilities |
+| `@okx-intent-swap/sdk-contracts` | Settlement contract ABI |
 
-## Order Structure
+---
+
+## Quick Start
 
 ```typescript
-interface Order {
-  fromTokenAddress: string; // Token to sell
-  toTokenAddress: string; // Token to buy
-  receiver: string; // Receiver of trade proceeds
-  fromTokenAmount: bigint; // Amount to sell
-  toTokenAmount: bigint; // Minimum amount to receive
-  validTo: number; // Expiry timestamp (unix seconds)
-  appData: string; // Application-specific data (bytes32)
-  swapMode: OrderKind; // EXACT_IN
-  partiallyFillable: boolean; // Allow partial fills
-  commissionInfos: CommissionInfo[]; // Fee configurations
+import { buildSettleCalldata } from '@okx-intent-swap/sdk-solver';
+import { ethers } from 'ethers';
+
+// Step 1: Receive /solve request & compute your solution (response)
+const request = await receiveAuctionRequest();   // SolveRequest
+const response = await computeSolution(request); // SolveResponse
+
+// Step 2: Build calldata (interactions = [pre, swap, post] phases, empty by default)
+const { calldata } = buildSettleCalldata(request, response, {
+  interactions: [[], [], []],
+});
+
+// Step 3: Submit settle() transaction
+const provider = new ethers.providers.JsonRpcProvider(RPC_URL);
+const solver = new ethers.Wallet(SOLVER_PK, provider);
+const tx = await solver.sendTransaction({
+  to: SETTLEMENT_CONTRACT,
+  data: calldata,
+});
+await tx.wait();
+```
+
+## API Types: SolveRequest / SolveResponse
+
+The SDK defines strict types for the `/solve` endpoint wire format.
+
+### SolveRequest
+
+```typescript
+interface SolveRequest {
+  auctionId: string;             // Auction ID → becomes settleId on-chain
+  orders: SolveRequestOrder[];
+}
+
+interface SolveRequestOrder {
+  fromTokenAddress: string;      // Token to sell
+  toTokenAddress: string;        // Token to buy
+  owner: string;                 // Order signer address
+  receiver: string;              // Proceeds recipient (owner if same)
+  fromTokenAmount: string;       // Sell amount (decimal string)
+  toTokenAmount: string;         // Min buy amount (decimal string)
+  validTo: number;               // Expiry (unix seconds)
+  appDataHash: string;           // Application data (bytes32 hex)
+  swapMode: string;              // "exactIn" | "exactOut"
+  partiallyFillable: boolean;
+  signingScheme: string;         // "eip712" | "ethSign" | "eip1271" | "preSign"
+  signature: string;             // Order signature (hex)
+  commissionInfos: ApiCommissionInfo[];
 }
 ```
 
-## Signing Schemes
-
-The SDK supports multiple signing schemes:
-
-1. **EIP-712** (default): Standard typed data signing
-2. **eth_sign**: Legacy Ethereum message signing
-3. **EIP-1271**: Smart contract signatures (for Gnosis Safe, etc.)
-4. **PreSign**: On-chain pre-signatures
+### SolveResponse
 
 ```typescript
-import { SigningScheme } from '@intentswap/sdk';
+interface SolveResponse {
+  solutions: Solution[];         // Typically one solution
+}
 
-// Sign with EIP-712 (default)
-const order1 = await sdk.signOrder(order, SigningScheme.EIP712);
+interface Solution {
+  clearingPrices: Record<string, string>;  // tokenAddress → price (decimal string)
+  orders: SolveResponseOrder[];            // Parallel to request.orders
+  surplusFeeInfo: ApiSurplusFeeInfo;       // Protocol surplus fee config
+}
 
-// Sign with PreSign (gasless)
-const order2 = await sdk.signOrder(order, SigningScheme.PRE_SIGN);
-
-// Set pre-signature on-chain
-await sdk.setPreSignature(order2.uid, true);
+interface SolveResponseOrder {
+  executedFromTokenAmount: string;  // Actual sell amount (decimal string)
+  executedToTokenAmount: string;    // Actual buy amount (decimal string)
+  commissionInfos: ApiCommissionInfo[];
+  solverFeeInfo: ApiSolverFeeInfo;
+}
 ```
 
-## Commission Fees
-
-Add commission fees to orders:
+### Fee Types
 
 ```typescript
-import { CommissionFlags } from '@intentswap/sdk';
+interface ApiCommissionInfo {
+  feePercent: string;              // Rate in 1e9 precision ("3000000" = 0.3%)
+  referrerWalletAddress: string;   // Fee recipient
+  feeDirection: boolean;           // true = fromToken, false = toToken
+  toB: boolean;                    // true = Settlement pays, false = user pays
+  commissionType: string;          // "okx" | "parent" | "child"
+}
 
-const order = await sdk.createOrder({
-  // ... other params
-  commissionInfos: [
-    {
-      feePercent: 10_000_000n, // 1% fee (in 1e9 precision)
-      referrerWalletAddress: '0x...', // Fee recipient
-      flag: CommissionFlags.FROM_TOKEN_COMMISSION, // Fee from sell token
-    },
-  ],
+interface ApiSolverFeeInfo {
+  feePercent: string;              // Solver fee rate (1e9 precision)
+  solverAddress: string;
+  feeDirection: boolean;           // true = fromToken, false = toToken
+  feeAmount: string;               // Informational total amount
+}
+
+interface ApiSurplusFeeInfo {
+  feePercent: string;              // Surplus fee rate (1e9 precision)
+  trimReceiver: string;            // Protocol fee recipient
+  flag: string;                    // Flag value
+}
+```
+
+> **Note:** The raw API response may be wrapped in `{ code, msg, data: { solutions } }`. You need to unwrap it before passing to `buildSettleCalldata()`. See the [full example](examples/nodejs-ethers5/src/build-calldata.ts) for the unwrapping pattern.
+
+## Clearing Prices: Two Modes
+
+`buildSettleCalldata` supports two strategies for computing clearing prices:
+
+### Mode 1: API Prices (default)
+
+Uses `solution.clearingPrices` from the API response directly. The SDK converts decimal string ratios into uint256 integers by scaling all prices to the same decimal precision.
+
+```typescript
+const { calldata } = buildSettleCalldata(request, response, {
+  interactions: [[], [], []],
 });
 ```
 
-## Low-Level API
+**When to use:** Your solver API already returns well-formed clearing prices.
 
-For more control, use `OrderSigningUtils` directly:
+### Mode 2: Computed Prices
+
+Derives clearing prices from execution amounts and fees. For each order:
+- `P_sell = executedToTokenAmount` (buy-side price)
+- `P_buy = executedFromTokenAmount - totalFromTokenFees` (sell-side price minus fees)
 
 ```typescript
-import { OrderSigningUtils, createDomain } from '@intentswap/sdk';
-
-// Get EIP-712 domain
-const domain = OrderSigningUtils.getDomain(chainId, settlementAddress);
-
-// Convert order to EIP-712 message
-const message = OrderSigningUtils.orderToMessage(order);
-
-// Compute order UID
-const uid = OrderSigningUtils.computeOrderUid(orderDigest, owner, validTo);
-
-// Extract UID params
-const { orderDigest, owner, validTo } = OrderSigningUtils.extractOrderUidParams(uid);
+const { calldata } = buildSettleCalldata(request, response, {
+  interactions: [[], [], []],
+  useComputedPrices: true,
+});
 ```
 
-## EIP-712 Domain
+**When to use:** You want prices that exactly match the execution amounts, or when handling complex multi-token batches where API prices may not capture fee adjustments precisely.
 
-The SDK uses the following EIP-712 domain for order signing:
+## buildSettleCalldata Options
 
-| Field | Value |
-|-------|-------|
-| name | `OKX Intent Swap` |
-| version | `v1.0.0` |
-| chainId | Network chain ID |
-| verifyingContract | Settlement contract address |
+```typescript
+interface BuildSettleCalldataOptions {
+  interactions?: [Interaction[], Interaction[], Interaction[]];  // [pre, swap, post]
+  solutionIndex?: number;    // Which solution to use (default: 0)
+  useComputedPrices?: boolean; // Derive prices from execution data (default: false)
+}
+```
+
+## What buildSettleCalldata Does Internally
+
+1. Parse `auctionId` → `settleId` (bigint)
+2. Collect all unique token addresses → `tokens[]`
+3. Convert clearing prices (decimal string → uint256)
+4. Build `Trade[]` by merging request orders + response execution data
+5. Pack commission flags (direction + ToB + label → single uint256 bitmask)
+6. Sort trades by `toTokenAddressIndex` ascending (Settlement contract requirement)
+7. ABI-encode everything as `Settlement.settle()` calldata
+
+## Examples
+
+See [`examples/nodejs-ethers5/src/build-calldata.ts`](examples/nodejs-ethers5/src/build-calldata.ts) — demonstrates how to transform raw `/solve` API JSON into SDK types and produce ABI-encoded calldata.
+
+```bash
+cd examples/nodejs-ethers5
+pnpm build && pnpm build-calldata
+```
 
 ## Development
 
 ```bash
-# Install dependencies
-pnpm install
-
-# Build all packages
-pnpm build
-
-# Run tests
-pnpm test
-
-# Type check
-pnpm typecheck
+pnpm install       # Install dependencies
+pnpm build         # Build all packages
+pnpm test          # Run tests (76 tests)
+pnpm typecheck     # Type check
 ```
-
-## E2E Testing
-
-Run the full end-to-end test against a local Anvil node:
-
-```bash
-# From the repository root
-./scripts/sdk-e2e-anvil.sh
-```
-
-Or manually:
-
-```bash
-# Terminal 1: Start Anvil
-anvil
-
-# Terminal 2: Deploy contracts
-forge script script/DeployLocal.s.sol --rpc-url http://127.0.0.1:8545 --broadcast
-
-# Terminal 3: Build and run E2E
-pnpm build
-cd examples/nodejs-ethers5
-bun run build
-bun dist/e2e-settle.js
-```
-
-The E2E test will:
-1. Create and sign an order as a trader
-2. Submit a settlement transaction as a solver
-3. Verify token balances changed correctly
-4. Output a full execution trace via `cast run`
-
-## Contract Addresses
-
-Update contract addresses in `packages/config/src/contracts.ts` after deployment.
 
 ## License
 
-LGPL-3.0-or-later
+MIT

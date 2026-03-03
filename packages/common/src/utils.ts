@@ -2,9 +2,9 @@
  * Utility functions for IntentSwap SDK
  */
 
-import { ORDER_UID_LENGTH, RECEIVER_SAME_AS_OWNER } from './constants';
-import type { CommissionInfo, CommissionInfoForSigning, Order, OrderForSigning } from './types';
-import { ORDER_KIND_HASH, OrderKind } from './types';
+import { ORDER_UID_LENGTH, RECEIVER_SAME_AS_OWNER } from './constants.js';
+import type { CommissionInfo, CommissionInfoForSigning, Order, OrderForSigning } from './types.js';
+import { ORDER_KIND_HASH, OrderKind } from './types.js';
 
 /**
  * Converts a hex string to Uint8Array
