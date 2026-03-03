@@ -83,11 +83,6 @@ The `settle()` function takes:
 - `MAX_COMMISSION_ENTRIES = 3`
 - `ORDER_UID_LENGTH = 56` bytes (32 digest + 20 owner + 4 validTo)
 
-### Deployments
-
-- `deployments/anvil.json` — local Anvil addresses (default Foundry keys)
-- `deployments/eth_stg.json` — Ethereum staging environment addresses
-
 ### Test Organization
 
 Tests live at `packages/*/src/__tests__/*.test.ts`. Jest moduleNameMapper resolves `@okx-intent-swap/*` to source directories. Coverage collects from `packages/*/src/**/*.ts`.
