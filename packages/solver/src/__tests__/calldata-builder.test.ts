@@ -334,7 +334,7 @@ describe('buildTradeFromSolveOrders', () => {
     expect(trade.signature).toBe(SAMPLE_SIGNATURE);
   });
 
-  it('should set receiver to ADDRESS_ZERO when same as owner', () => {
+  it('should preserve receiver as-is even when same as owner', () => {
     const trade = buildTradeFromSolveOrders(
       {
         fromTokenAddress: USDC,
@@ -365,7 +365,7 @@ describe('buildTradeFromSolveOrders', () => {
       tokenIndexMap
     );
 
-    expect(trade.receiver).toBe(ADDRESS_ZERO);
+    expect(trade.receiver).toBe(OWNER); // receiver preserved as-is for EIP-712 hash correctness
   });
 
   it('should encode trade flags correctly', () => {
@@ -504,7 +504,7 @@ describe('buildSettleCalldata', () => {
     expect(trade.fromTokenAddressIndex.toString()).toBe('0');
     expect(trade.toTokenAddressIndex.toString()).toBe('1');
     expect(trade.owner).toBe(OWNER);
-    expect(trade.receiver).toBe(ADDRESS_ZERO); // receiver === owner
+    expect(trade.receiver).toBe(OWNER); // receiver preserved as-is
     expect(trade.fromTokenAmount.toString()).toBe('1000000000');
     expect(trade.toTokenAmount.toString()).toBe('500000000000000');
     expect(trade.executedAmount.toString()).toBe('1000000000');
