@@ -249,7 +249,7 @@ describe('E2E: real API data → calldata', () => {
     expect(trade.fromTokenAddressIndex).toBe(0); // WETH
     expect(trade.toTokenAddressIndex).toBe(1);   // USDC
     expect(trade.owner).toBe(OWNER);
-    expect(trade.receiver).toBe(ADDRESS_ZERO); // receiver === owner → 0x0
+    expect(trade.receiver).toBe(OWNER); // receiver preserved as-is for EIP-712 hash correctness
     expect(trade.fromTokenAmount).toBe(2000000000000000n);
     expect(trade.toTokenAmount).toBe(3827335n);
     expect(trade.executedAmount).toBe(2000000000000000n); // exactIn → fromToken

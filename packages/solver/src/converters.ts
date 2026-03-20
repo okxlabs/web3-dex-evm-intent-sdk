@@ -246,11 +246,9 @@ export function buildTradeFromSolveOrders(
       ? BigInt(resOrder.executedFromTokenAmount)
       : BigInt(resOrder.executedToTokenAmount);
 
-  // If receiver === owner, use address(0) per protocol convention
-  const receiver =
-    reqOrder.receiver.toLowerCase() === reqOrder.owner.toLowerCase()
-      ? ADDRESS_ZERO
-      : reqOrder.receiver;
+  // Use receiver as-is from the request — the EIP-712 order hash includes
+  // the original receiver address, so replacing it would break signature verification.
+  const receiver = reqOrder.receiver;
 
   // Convert commission infos from response (solver-determined)
   const commissionInfos = resOrder.commissionInfos.map(convertApiCommissionInfo);
