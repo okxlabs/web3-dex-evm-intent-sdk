@@ -2,26 +2,23 @@
 
 TypeScript SDK for building `Settlement.settle()` calldata — converts Solver API `/solve` request + response into ABI-encoded calldata ready for on-chain submission.
 
-## Installation
+## Quick Start (Standalone)
+
+**No npm install needed.** Copy the standalone example directly into your project:
+
+> [`examples/settle-calldata-standalone.ts`](https://github.com/okxlabs/web3-dex-evm-intent-sdk/blob/main/examples/settle-calldata-standalone.ts)
+
+This single file contains all types, ABI, and the `buildSettleCalldata()` function — zero internal dependencies, only requires `ethers@^5.7.0`.
 
 ```bash
-pnpm add @okx-intent-swap/sdk-solver ethers@^5.7.0
+# 1. Copy the standalone file into your project
+curl -o settle-calldata.ts https://raw.githubusercontent.com/okxlabs/web3-dex-evm-intent-sdk/main/examples/settle-calldata-standalone.ts
+
+# 2. Import and use
 ```
 
-## Packages
-
-| Package | Description |
-| ------- | ----------- |
-| `@okx-intent-swap/sdk-solver` | Solver calldata builder (`buildSettleCalldata`) |
-| `@okx-intent-swap/sdk-common` | Core types, constants, and utilities |
-| `@okx-intent-swap/sdk-contracts` | Settlement contract ABI |
-
----
-
-## Quick Start
-
 ```typescript
-import { buildSettleCalldata } from '@okx-intent-swap/sdk-solver';
+import { buildSettleCalldata } from './settle-calldata';
 import { ethers } from 'ethers';
 
 // Step 1: Receive /solve request & compute your solution (response)
@@ -42,6 +39,14 @@ const tx = await solver.sendTransaction({
 });
 await tx.wait();
 ```
+
+## Source Packages (monorepo internal, not published to npm)
+
+| Directory | Description |
+| --------- | ----------- |
+| `packages/solver` | Solver calldata builder (`buildSettleCalldata`) |
+| `packages/common` | Core types, constants, and utilities |
+| `packages/contracts` | Settlement contract ABI |
 
 ## API Types: SolveRequest / SolveResponse
 
@@ -173,7 +178,13 @@ interface BuildSettleCalldataOptions {
 
 ## Examples
 
-See [`examples/nodejs-ethers5/src/build-calldata.ts`](examples/nodejs-ethers5/src/build-calldata.ts) — demonstrates how to transform raw `/solve` API JSON into SDK types and produce ABI-encoded calldata.
+### Standalone (recommended for solvers)
+
+[`examples/settle-calldata-standalone.ts`](https://github.com/okxlabs/web3-dex-evm-intent-sdk/blob/main/examples/settle-calldata-standalone.ts) — single-file, zero-dependency (except ethers). Copy it directly into your solver project.
+
+### Monorepo example
+
+[`examples/nodejs-ethers5/src/build-calldata.ts`](examples/nodejs-ethers5/src/build-calldata.ts) — demonstrates how to transform raw `/solve` API JSON into SDK types and produce ABI-encoded calldata.
 
 ```bash
 cd examples/nodejs-ethers5
