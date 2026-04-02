@@ -16,7 +16,7 @@ If `$ARGUMENTS` is a `0x`-prefixed hex string, run the full verification pipelin
 
 ```
 original calldata
-  → reconstructFromCalldata()  → { request, response, interactions }
+  → reconstructFromCalldata()  → { settleId, request, response, interactions }
   → buildSettleCalldata()      → re-encoded calldata
   → compare original vs re-encoded
 ```
@@ -32,7 +32,7 @@ import {
 
 const originalCalldata = '0x...';
 
-const { request, response, interactions } = reconstructFromCalldata(originalCalldata);
+const { settleId, request, response, interactions } = reconstructFromCalldata(originalCalldata);
 ```
 
 ## Step 2: Re-Encode
