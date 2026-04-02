@@ -24,7 +24,7 @@ SolveRequest + SolveResponse → buildSettleCalldata() → hex calldata → Sett
 
 ```typescript
 interface SolveRequest {
-  auctionId: string;           // becomes settleId (bigint)
+  auctionId?: string;          // from /solve API (not used by buildSettleCalldata)
   orders: SolveRequestOrder[];
 }
 
@@ -99,7 +99,6 @@ Strip envelope/extra fields to match SDK types:
 const rawApiResponse = await fetch('/solve', { ... }).then(r => r.json());
 
 const request: SolveRequest = {
-  auctionId: rawApiResponse.auctionId,
   orders: rawApiResponse.orders,
 };
 
@@ -137,7 +136,11 @@ import {
   type SolveResponse,
 } from '@okx-intent-swap/sdk-solver';
 
-const result = buildSettleCalldata(request, response, {
+// settleId comes from /settle callback's settleInfos[].settleId
+// It is NOT the same as auctionId — they are different values assigned by Autopilot.
+const settleId = settleRequest.settleInfos[0].settleId;
+
+const result = buildSettleCalldata(request, response, settleId, {
   // interactions: [[], [], []],    // default: no interactions
   // solutionIndex: 0,              // default: first solution
   // useComputedPrices: true,       // default: true (recommended)
@@ -176,8 +179,9 @@ import {
   type SolveResponse,
 } from '@okx-intent-swap/sdk-solver';
 
+const settleId = '12345'; // from /settle callback's settleInfos[].settleId
+
 const request: SolveRequest = {
-  auctionId: '12345',
   orders: [{
     fromTokenAddress: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
     toTokenAddress: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
@@ -232,7 +236,7 @@ const response: SolveResponse = {
   }],
 };
 
-const result = buildSettleCalldata(request, response);
+const result = buildSettleCalldata(request, response, settleId);
 console.log('Calldata:', result.calldata);
 console.log('SettleId:', result.params.settleId);
 ```

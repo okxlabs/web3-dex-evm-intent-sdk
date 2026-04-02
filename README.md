@@ -25,12 +25,15 @@ import { ethers } from 'ethers';
 const request = await receiveAuctionRequest();   // SolveRequest
 const response = await computeSolution(request); // SolveResponse
 
-// Step 2: Build calldata (interactions = [pre, swap, post] phases, empty by default)
-const { calldata } = buildSettleCalldata(request, response, {
+// Step 2: Receive settleId from /settle callback
+const settleId = settleRequest.settleInfos[0].settleId;
+
+// Step 3: Build calldata (interactions = [pre, swap, post] phases, empty by default)
+const { calldata } = buildSettleCalldata(request, response, settleId, {
   interactions: [[], [], []],
 });
 
-// Step 3: Submit settle() transaction
+// Step 4: Submit settle() transaction
 const provider = new ethers.providers.JsonRpcProvider(RPC_URL);
 const solver = new ethers.Wallet(SOLVER_PK, provider);
 const tx = await solver.sendTransaction({
@@ -56,7 +59,7 @@ The SDK defines strict types for the `/solve` endpoint wire format.
 
 ```typescript
 interface SolveRequest {
-  auctionId: string;             // Auction ID → becomes settleId on-chain
+  auctionId?: string;            // Auction ID from /solve API (not used by buildSettleCalldata)
   orders: SolveRequestOrder[];
 }
 
@@ -129,46 +132,52 @@ interface ApiSurplusFeeInfo {
 
 `buildSettleCalldata` supports two strategies for computing clearing prices:
 
-### Mode 1: API Prices (default)
+### Mode 1: API Prices
 
 Uses `solution.clearingPrices` from the API response directly. The SDK converts decimal string ratios into uint256 integers by scaling all prices to the same decimal precision.
 
 ```typescript
-const { calldata } = buildSettleCalldata(request, response, {
-  interactions: [[], [], []],
+const { calldata } = buildSettleCalldata(request, response, settleId, {
+  useComputedPrices: false,
 });
 ```
 
 **When to use:** Your solver API already returns well-formed clearing prices.
 
-### Mode 2: Computed Prices
+### Mode 2: Computed Prices (default)
 
 Derives clearing prices from execution amounts and fees. For each order:
 - `P_sell = executedToTokenAmount` (buy-side price)
 - `P_buy = executedFromTokenAmount - totalFromTokenFees` (sell-side price minus fees)
 
 ```typescript
-const { calldata } = buildSettleCalldata(request, response, {
-  interactions: [[], [], []],
+const { calldata } = buildSettleCalldata(request, response, settleId, {
   useComputedPrices: true,
 });
 ```
 
 **When to use:** You want prices that exactly match the execution amounts, or when handling complex multi-token batches where API prices may not capture fee adjustments precisely.
 
-## buildSettleCalldata Options
+## buildSettleCalldata API
 
 ```typescript
+function buildSettleCalldata(
+  request: SolveRequest,
+  response: SolveResponse,
+  settleId: string | bigint,       // from /settle callback's settleInfos[].settleId
+  options?: BuildSettleCalldataOptions
+): BuildSettleCalldataResult;
+
 interface BuildSettleCalldataOptions {
   interactions?: [Interaction[], Interaction[], Interaction[]];  // [pre, swap, post]
   solutionIndex?: number;    // Which solution to use (default: 0)
-  useComputedPrices?: boolean; // Derive prices from execution data (default: false)
+  useComputedPrices?: boolean; // Derive prices from execution data (default: true)
 }
 ```
 
 ## What buildSettleCalldata Does Internally
 
-1. Parse `auctionId` → `settleId` (bigint)
+1. Convert `settleId` → bigint (from /settle callback, distinct from auctionId)
 2. Collect all unique token addresses → `tokens[]`
 3. Convert clearing prices (decimal string → uint256)
 4. Build `Trade[]` by merging request orders + response execution data
@@ -196,7 +205,7 @@ pnpm build && pnpm build-calldata
 ```bash
 pnpm install       # Install dependencies
 pnpm build         # Build all packages
-pnpm test          # Run tests (76 tests)
+pnpm test          # Run tests (78 tests)
 pnpm typecheck     # Type check
 ```
 

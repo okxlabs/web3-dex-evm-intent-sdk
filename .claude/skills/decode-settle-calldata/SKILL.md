@@ -113,14 +113,16 @@ Unpacks flags, decodes trade flags, recovers executed amounts, restores `SolveRe
 ```typescript
 import { reconstructFromCalldata } from '@okx-intent-swap/sdk-solver';
 
-const { request, response, interactions } = reconstructFromCalldata('0x...');
+const { settleId, request, response, interactions } = reconstructFromCalldata('0x...');
+// settleId: bigint — the on-chain settle ID (distinct from auctionId)
+// request.auctionId is undefined — cannot be recovered from calldata
 ```
 
 ### Recovery Details
 
 | Field | Method |
 |-------|--------|
-| `auctionId` | Direct from `settleId` |
+| `auctionId` | Not recoverable from calldata (only settleId is encoded on-chain) |
 | `fromTokenAddress` / `toTokenAddress` | `tokens[trade.fromTokenAddressIndex]` |
 | `receiver` | `address(0)` restored to `owner` |
 | `swapMode`, `partiallyFillable`, `signingScheme` | Decoded from `trade.flags` |
@@ -174,8 +176,8 @@ for (let i = 0; i < decoded.trades.length; i++) {
 }
 
 // Level 2
-const { request, response, interactions } = reconstructFromCalldata(calldata);
-console.log('Auction ID:', request.auctionId);
+const { settleId, request, response, interactions } = reconstructFromCalldata(calldata);
+console.log('Settle ID:', settleId.toString());
 
 for (let i = 0; i < request.orders.length; i++) {
   const resOrder = response.solutions[0].orders[i];

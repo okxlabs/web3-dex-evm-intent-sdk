@@ -45,7 +45,7 @@ All inter-package imports use `@okx-intent-swap/sdk-*` package names (resolved v
 ### Core Data Flow
 
 ```
-SolveRequest + SolveResponse → buildSettleCalldata() → hex calldata → Settlement.settle()
+SolveRequest + SolveResponse + settleId → buildSettleCalldata() → hex calldata → Settlement.settle()
 ```
 
 ### Key Type Relationships
@@ -69,7 +69,7 @@ SolveRequest + SolveResponse → buildSettleCalldata() → hex calldata → Sett
 EIP-712 domain: `name="OKX Intent Swap"`, `version="v1.0.0"`
 
 The `settle()` function takes:
-- `settleId` (from auctionId)
+- `settleId` (from /settle callback, distinct from auctionId)
 - `tokens[]` (deduplicated address list)
 - `clearingPrices[]` (parallel to tokens, uint256)
 - `trades[]` (reference tokens by index, sorted by toTokenAddressIndex ascending)
