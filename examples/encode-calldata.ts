@@ -12,6 +12,7 @@
  *   npx tsx examples/encode-calldata.ts \
  *     --request  request.json \
  *     --response response.json \
+ *     --settle   settle.json \
  *     --interactions interactions.json \
  *     --settlement 0x1a34E1e604D8a55405172C0717B17F7631d5f265 \
  *     --from 0xaFe9d55A5a4e90bBBabBa0327BF72196B5683596 \
@@ -56,6 +57,14 @@
  *     }]
  *   }
  *
+ *   settle.json — /settle request body (required):
+ *   {
+ *     "auctionId": "12345",
+ *     "settleInfos": [
+ *       { "settleId": "67890", "solutionId": "1" }
+ *     ]
+ *   }
+ *
  *   interactions.json — 3-phase interaction array:
  *   [
  *     [],
@@ -96,6 +105,7 @@ if (hasFlag('--help') || hasFlag('-h')) {
 
 const requestFile = getArg('--request');
 const responseFile = getArg('--response');
+const settleFile = getArg('--settle');
 const interactionsFile = getArg('--interactions', '');
 const settlementAddr = getArg('--settlement', '');
 const fromAddr = getArg('--from', '');
@@ -109,7 +119,6 @@ const outFile = getArg('--out', 'settle-calldata-result.json');
 const requestRaw = JSON.parse(fs.readFileSync(requestFile, 'utf-8'));
 
 const request: SolveRequest = {
-  auctionId: requestRaw.auctionId,
   orders: requestRaw.orders.map((o: any) => ({
     fromTokenAddress: o.fromTokenAddress,
     toTokenAddress: o.toTokenAddress,
@@ -201,11 +210,18 @@ if (interactionsFile) {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
+// Parse settle request (settleId comes from here, NOT from /solve request)
+// ────────────────────────────────────────────────────────────────────────────
+
+const settleRaw = JSON.parse(fs.readFileSync(settleFile, 'utf-8'));
+const settleId: string = settleRaw.settleInfos[0].settleId;
+
+// ────────────────────────────────────────────────────────────────────────────
 // Build calldata
 // ────────────────────────────────────────────────────────────────────────────
 
 console.log('Building calldata...');
-const result = buildSettleCalldata(request, response, {
+const result = buildSettleCalldata(request, response, settleId, {
   interactions,
   useComputedPrices: true,
 });
@@ -262,6 +278,10 @@ const interactionsForLog = interactions.map((phase) =>
   }))
 );
 
+// ────────────────────────────────────────────────────────────────────────────
+// Write output
+// ────────────────────────────────────────────────────────────────────────────
+
 const paramsForLog = {
   settleId: result.params.settleId.toString(),
   tokens: result.params.tokens,
@@ -295,10 +315,6 @@ const paramsForLog = {
     flag: result.params.surplusFeeInfo.flag.toString(),
   },
 };
-
-// ────────────────────────────────────────────────────────────────────────────
-// Write output
-// ────────────────────────────────────────────────────────────────────────────
 
 const output = {
   timestamp: new Date().toISOString(),

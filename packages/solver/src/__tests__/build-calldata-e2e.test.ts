@@ -23,6 +23,9 @@ const CHILD_REFERRER = '0x2c825edb17c2c04983a481ebd2da2a39424c7cb7';
 const PARENT_REFERRER = '0x3474fbbc6e43dcb0398e2eacbe1032cced806742';
 const ADDRESS_ZERO = '0x0000000000000000000000000000000000000000';
 
+// settleId is assigned by Autopilot in /settle callback, distinct from auctionId
+const SETTLE_ID = '16888616559299999';
+
 /**
  * Raw /solve request from API — includes extra fields not needed by SDK.
  */
@@ -93,7 +96,6 @@ const rawResponse = {
   data: {
     solutions: [
       {
-        solutionId: '1',
         submissionAddress: SOLVER,
         orders: [
           {
@@ -158,7 +160,6 @@ const rawResponse = {
 
 function toSolveRequest(raw: typeof rawRequest): SolveRequest {
   return {
-    auctionId: raw.auctionId,
     orders: raw.orders.map((order) => ({
       fromTokenAddress: order.fromTokenAddress,
       toTokenAddress: order.toTokenAddress,
@@ -220,12 +221,12 @@ describe('E2E: real API data → calldata', () => {
   const response = toSolveResponse(rawResponse);
 
   it('should produce decodable calldata with correct settleId and tokens', () => {
-    const result = buildSettleCalldata(request, response);
+    const result = buildSettleCalldata(request, response, SETTLE_ID);
     const iface = new ethers.utils.Interface(SETTLEMENT_ABI);
     const decoded = iface.decodeFunctionData('settle', result.calldata);
 
     // settleId
-    expect(decoded.settleId.toString()).toBe('16888616559291392');
+    expect(decoded.settleId.toString()).toBe(SETTLE_ID);
 
     // Tokens: WETH first (from), USDC second (to) — insertion order from request
     expect(decoded.tokens.length).toBe(2);
@@ -234,7 +235,7 @@ describe('E2E: real API data → calldata', () => {
   });
 
   it('should encode clearing prices correctly from decimal strings', () => {
-    const result = buildSettleCalldata(request, response, { useComputedPrices: false });
+    const result = buildSettleCalldata(request, response, SETTLE_ID, { useComputedPrices: false });
 
     // WETH = "1", USDC = "0.000000001939175082119537920642893019" (36 decimal places)
     // Scale by 10^36: WETH = 1 * 10^36, USDC = 1_939_175_082_119_537_920_642_893_019
@@ -243,7 +244,7 @@ describe('E2E: real API data → calldata', () => {
   });
 
   it('should build trade with correct owner, receiver, and amounts', () => {
-    const result = buildSettleCalldata(request, response);
+    const result = buildSettleCalldata(request, response, SETTLE_ID);
     const trade = result.params.trades[0];
 
     expect(trade.fromTokenAddressIndex).toBe(0); // WETH
@@ -256,7 +257,7 @@ describe('E2E: real API data → calldata', () => {
   });
 
   it('should encode commission flags with correct label bits', () => {
-    const result = buildSettleCalldata(request, response);
+    const result = buildSettleCalldata(request, response, SETTLE_ID);
     const cis = result.params.trades[0].commissionInfos;
 
     expect(cis).toHaveLength(3);
@@ -278,7 +279,7 @@ describe('E2E: real API data → calldata', () => {
   });
 
   it('should encode solver fee and surplus fee correctly', () => {
-    const result = buildSettleCalldata(request, response);
+    const result = buildSettleCalldata(request, response, SETTLE_ID);
     const trade = result.params.trades[0];
 
     expect(trade.solverFeeInfo.feePercent).toBe(0n);
@@ -289,7 +290,7 @@ describe('E2E: real API data → calldata', () => {
   });
 
   it('should compute correct clearing prices from execution amounts (useComputedPrices)', () => {
-    const result = buildSettleCalldata(request, response, { useComputedPrices: true });
+    const result = buildSettleCalldata(request, response, SETTLE_ID, { useComputedPrices: true });
 
     const eS = 2000000000000000n;
     const eB = 3860897n;
@@ -313,8 +314,8 @@ describe('E2E: real API data → calldata', () => {
   });
 
   it('should produce identical calldata length for both price modes', () => {
-    const resultApi = buildSettleCalldata(request, response, { useComputedPrices: false });
-    const resultComputed = buildSettleCalldata(request, response);
+    const resultApi = buildSettleCalldata(request, response, SETTLE_ID, { useComputedPrices: false });
+    const resultComputed = buildSettleCalldata(request, response, SETTLE_ID);
 
     // Calldata structure is the same, only clearing price values differ
     expect(resultApi.calldata.length).toBe(resultComputed.calldata.length);

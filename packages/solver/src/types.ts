@@ -123,8 +123,8 @@ export interface Solution {
  * /solve request body.
  */
 export interface SolveRequest {
-  /** Auction / settle ID */
-  auctionId: string;
+  /** Auction ID from /solve API (not used by buildSettleCalldata) */
+  auctionId?: string;
   /** Orders to settle */
   orders: SolveRequestOrder[];
 }
@@ -135,4 +135,30 @@ export interface SolveRequest {
 export interface SolveResponse {
   /** Solver solutions (typically one) */
   solutions: Solution[];
+}
+
+// ============ /settle request types ============
+
+/**
+ * Single entry in /settle request's settleInfos array.
+ */
+export interface SettleInfo {
+  /** Settle ID assigned by Autopilot, used as first param to Settlement.settle() on-chain */
+  settleId: string;
+  /** Solution ID (from /solve response), used to identify which solution to settle */
+  solutionId: string;
+}
+
+/**
+ * /settle request body sent by Autopilot to instruct solver to execute on-chain.
+ */
+export interface SettleRequest {
+  /** Chain ID (e.g. "1") */
+  chainIndex?: string;
+  /** Auction ID (same as in /solve request) */
+  auctionId: string;
+  /** Settlement entries, each mapping a solution to its on-chain settleId */
+  settleInfos: SettleInfo[];
+  /** Latest block height for transaction inclusion */
+  submissionDeadlineLatestBlock?: string;
 }

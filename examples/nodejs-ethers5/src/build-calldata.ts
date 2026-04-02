@@ -23,7 +23,9 @@ import {
 } from '@okx-intent-swap/sdk-solver';
 import { ethers } from 'ethers';
 
-// ============ Raw API Input (as received from /solve endpoint) ============
+// ============ Raw API Input (as received from /solve and /settle endpoints) ============
+
+const SETTLE_ID = '16893382874345600';
 
 /**
  * Raw /solve request body — contains fields beyond what the SDK needs.
@@ -167,7 +169,6 @@ const rawResponse = {
  */
 function toSolveRequest(raw: typeof rawRequest): SolveRequest {
   return {
-    auctionId: raw.auctionId,
     orders: raw.orders.map((order) => ({
       fromTokenAddress: order.fromTokenAddress,
       toTokenAddress: order.toTokenAddress,
@@ -283,7 +284,6 @@ function main() {
 
   // 1. Verify request/response transformation
   console.log('[Request]');
-  console.log('  auctionId:', request.auctionId);
   console.log('  orders:', request.orders.length);
   console.log('  owner:', request.orders[0].owner);
   console.log('  commissions:', request.orders[0].commissionInfos.length);
@@ -302,7 +302,7 @@ function main() {
   // ============================================================
   console.log('\n========== Scenario 1: Without Interactions ==========');
 
-  const result1 = buildSettleCalldata(request, response, {
+  const result1 = buildSettleCalldata(request, response, SETTLE_ID, {
     interactions: [[], [], []],
     useComputedPrices: true,
   });
@@ -327,8 +327,8 @@ function main() {
   const reconReqOrder0 = recon1.request.orders[0];
   const resOrder0 = response.solutions[0].orders[0];
   const reconResOrder0 = recon1.response.solutions[0].orders[0];
-  console.log('  auctionId match:',
-    recon1.request.auctionId === request.auctionId ? '✅' : '❌');
+  console.log('  settleId match:',
+    recon1.settleId.toString() === SETTLE_ID ? '✅' : '❌');
   console.log('  fromTokenAddress match:',
     reconReqOrder0.fromTokenAddress.toLowerCase() === reqOrder0.fromTokenAddress.toLowerCase() ? '✅' : '❌');
   console.log('  toTokenAddress match:',
@@ -357,7 +357,7 @@ function main() {
       ci.commissionType === reqOrder0.commissionInfos[i].commissionType
     ) ? '✅' : '❌');
   // Reverse: re-encode from reconstructed data, verify calldata matches
-  const reEncoded1 = buildSettleCalldata(recon1.request, recon1.response, {
+  const reEncoded1 = buildSettleCalldata(recon1.request, recon1.response, recon1.settleId, {
     interactions: recon1.interactions,
     useComputedPrices: false,
   });
@@ -380,7 +380,7 @@ function main() {
 
   const swapInteractions = buildSwapInteractions(WETH, DEX_TOKEN_APPROVE_ADDRESS, DEX_AGGREGATOR, dexSwapCalldata);
 
-  const result2 = buildSettleCalldata(request, response, {
+  const result2 = buildSettleCalldata(request, response, SETTLE_ID, {
     interactions: [[], swapInteractions, []], // [pre=empty, swap=approve+dex, post=empty]
     useComputedPrices: true,
   });
@@ -414,7 +414,7 @@ function main() {
     recon2.interactions[1][0]?.target.toLowerCase() === result2.params.interactions[1][0]?.target.toLowerCase() ? '✅' : '❌');
   console.log('  executedToTokenAmount match:',
     recon2.response.solutions[0].orders[0].executedToTokenAmount === resOrder0.executedToTokenAmount ? '✅' : '❌');
-  const reEncoded2 = buildSettleCalldata(recon2.request, recon2.response, {
+  const reEncoded2 = buildSettleCalldata(recon2.request, recon2.response, recon2.settleId, {
     interactions: recon2.interactions,
     useComputedPrices: false,
   });
