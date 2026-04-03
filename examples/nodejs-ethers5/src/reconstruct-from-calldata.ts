@@ -83,11 +83,11 @@ function main() {
   console.log('--- Reconstruct from Calldata Example ---\n');
 
   // Step 1: Reconstruct request, response, interactions from calldata
-  const { request, response, interactions } = reconstructFromCalldata(SAMPLE_CALLDATA);
+  const { settleId, request, response, interactions } = reconstructFromCalldata(SAMPLE_CALLDATA);
 
   // Print reconstructed request
-  console.log('========== Reconstructed SolveRequest ==========');
-  console.log('  auctionId:', request.auctionId);
+  console.log('========== Reconstructed ==========');
+  console.log('  settleId:', settleId.toString());
   console.log('  orders:', request.orders.length);
   request.orders.forEach((order, i) => {
     console.log(`\n  --- Order ${i} ---`);
@@ -133,7 +133,7 @@ function main() {
 
   // Step 2: Cross-verification — re-encode and compare against original calldata
   console.log('\n========== Cross-Verification ==========');
-  const reEncoded = buildSettleCalldata(request, response, {
+  const reEncoded = buildSettleCalldata(request, response, settleId, {
     interactions,
     useComputedPrices: false, // Use the on-chain clearingPrices directly
   });

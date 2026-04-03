@@ -410,7 +410,7 @@ describe('buildTradeFromSolveOrders', () => {
 
 describe('buildSettleCalldata', () => {
   const sampleRequest: SolveRequest = {
-    auctionId: '12345',
+
     orders: [
       {
         fromTokenAddress: USDC,
@@ -476,7 +476,7 @@ describe('buildSettleCalldata', () => {
   };
 
   it('should produce valid calldata that can be decoded', () => {
-    const result = buildSettleCalldata(sampleRequest, sampleResponse, { useComputedPrices: false });
+    const result = buildSettleCalldata(sampleRequest, sampleResponse, '12345', { useComputedPrices: false });
     const { calldata } = result;
 
     expect(calldata).toMatch(/^0x/);
@@ -525,7 +525,7 @@ describe('buildSettleCalldata', () => {
   });
 
   it('should return decoded params alongside calldata', () => {
-    const result = buildSettleCalldata(sampleRequest, sampleResponse);
+    const result = buildSettleCalldata(sampleRequest, sampleResponse, '12345');
 
     expect(result.params.settleId).toBe(12345n);
     expect(result.params.tokens.length).toBe(2);
@@ -536,7 +536,6 @@ describe('buildSettleCalldata', () => {
 
   it('should handle decimal clearing prices', () => {
     const request: SolveRequest = {
-      auctionId: '99',
       orders: [
         {
           fromTokenAddress: USDC,
@@ -585,7 +584,7 @@ describe('buildSettleCalldata', () => {
       ],
     };
 
-    const result = buildSettleCalldata(request, response, { useComputedPrices: false });
+    const result = buildSettleCalldata(request, response, '99', { useComputedPrices: false });
 
     // Verify clearing prices were scaled correctly
     // maxDecimals = 12, so USDC = 1 * 10^12 = 1000000000000, WETH = 1939
@@ -600,7 +599,7 @@ describe('buildSettleCalldata', () => {
   });
 
   it('should use default empty interactions', () => {
-    const result = buildSettleCalldata(sampleRequest, sampleResponse);
+    const result = buildSettleCalldata(sampleRequest, sampleResponse, '12345');
 
     const iface = new ethers.utils.Interface(SETTLEMENT_ABI);
     const decoded = iface.decodeFunctionData('settle', result.calldata);
@@ -612,7 +611,7 @@ describe('buildSettleCalldata', () => {
   });
 
   it('should pass custom interactions', () => {
-    const result = buildSettleCalldata(sampleRequest, sampleResponse, {
+    const result = buildSettleCalldata(sampleRequest, sampleResponse, '12345', {
       interactions: [
         [{ target: SOLVER, value: 0n, callData: '0x1234' }],
         [],
@@ -629,7 +628,7 @@ describe('buildSettleCalldata', () => {
 
   it('should throw on empty solutions', () => {
     expect(() =>
-      buildSettleCalldata(sampleRequest, { solutions: [] })
+      buildSettleCalldata(sampleRequest, { solutions: [] }, '12345')
     ).toThrow('Response contains no solutions');
   });
 
@@ -645,7 +644,7 @@ describe('buildSettleCalldata', () => {
     };
 
     expect(() =>
-      buildSettleCalldata(sampleRequest, badResponse)
+      buildSettleCalldata(sampleRequest, badResponse, '12345')
     ).toThrow('Order count mismatch');
   });
 
@@ -679,7 +678,7 @@ describe('buildSettleCalldata', () => {
       ],
     };
 
-    const result = buildSettleCalldata(sampleRequest, multiSolutionResponse, {
+    const result = buildSettleCalldata(sampleRequest, multiSolutionResponse, '12345', {
       solutionIndex: 1,
       useComputedPrices: false,
     });
@@ -687,6 +686,19 @@ describe('buildSettleCalldata', () => {
     // Should use solution[1] prices
     expect(result.params.clearingPrices[1]).toBe(2000n);
     expect(result.params.trades[0].executedAmount).toBe(1000n);
+  });
+
+  it('should encode settleId from options into calldata', () => {
+    const result = buildSettleCalldata(sampleRequest, sampleResponse, '99999', { useComputedPrices: false });
+    expect(result.params.settleId).toBe(99999n);
+    const iface = new ethers.utils.Interface(SETTLEMENT_ABI);
+    const decoded = iface.decodeFunctionData('settle', result.calldata);
+    expect(decoded.settleId.toString()).toBe('99999');
+  });
+
+  it('should accept bigint settleId', () => {
+    const result = buildSettleCalldata(sampleRequest, sampleResponse, 88888n, { useComputedPrices: false });
+    expect(result.params.settleId).toBe(88888n);
   });
 });
 
@@ -699,7 +711,7 @@ describe('buildSettleCalldata trade sorting by toTokenAddressIndex', () => {
     // Before sort: [trade0(toIdx=1), trade1(toIdx=0)]
     // After sort:  [trade1(toIdx=0), trade0(toIdx=1)]
     const request: SolveRequest = {
-      auctionId: '100',
+
       orders: [
         {
           fromTokenAddress: USDC,
@@ -761,7 +773,7 @@ describe('buildSettleCalldata trade sorting by toTokenAddressIndex', () => {
       ],
     };
 
-    const result = buildSettleCalldata(request, response, { useComputedPrices: false });
+    const result = buildSettleCalldata(request, response, '100', { useComputedPrices: false });
 
     // Trades must be sorted: toTokenAddressIndex ascending
     expect(result.params.trades.length).toBe(2);
@@ -1101,7 +1113,7 @@ describe('buildClearingPricesFromCustomPrices', () => {
 describe('buildSettleCalldata with useComputedPrices', () => {
   it('should produce valid calldata with computed prices (no fees)', () => {
     const request: SolveRequest = {
-      auctionId: '42',
+
       orders: [
         {
           fromTokenAddress: USDC,
@@ -1147,7 +1159,7 @@ describe('buildSettleCalldata with useComputedPrices', () => {
       ],
     };
 
-    const result = buildSettleCalldata(request, response, {
+    const result = buildSettleCalldata(request, response, '42', {
       useComputedPrices: true,
     });
 
@@ -1164,7 +1176,7 @@ describe('buildSettleCalldata with useComputedPrices', () => {
 
   it('should produce valid calldata with fromToken fees', () => {
     const request: SolveRequest = {
-      auctionId: '43',
+
       orders: [
         {
           fromTokenAddress: USDC,
@@ -1226,7 +1238,7 @@ describe('buildSettleCalldata with useComputedPrices', () => {
       ],
     };
 
-    const result = buildSettleCalldata(request, response, {
+    const result = buildSettleCalldata(request, response, '43', {
       useComputedPrices: true,
     });
 
@@ -1242,3 +1254,4 @@ describe('buildSettleCalldata with useComputedPrices', () => {
     expect(decoded.clearingPrices.length).toBe(2);
   });
 });
+

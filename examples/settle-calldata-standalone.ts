@@ -40,7 +40,7 @@ interface ApiSolverFeeInfo { feePercent: string; solverAddress: string; feeDirec
 interface ApiSurplusFeeInfo { feePercent: string; trimReceiver: string; flag: string; }
 interface SolveRequestOrder { fromTokenAddress: string; toTokenAddress: string; owner: string; receiver: string; fromTokenAmount: string; toTokenAmount: string; validTo: number; appDataHash: string; swapMode: string; partiallyFillable: boolean; signingScheme: string; signature: string; commissionInfos: ApiCommissionInfo[]; }
 interface SolveResponseOrder { executedFromTokenAmount: string; executedToTokenAmount: string; commissionInfos: ApiCommissionInfo[]; solverFeeInfo: ApiSolverFeeInfo; }
-interface SolveRequest { auctionId: string; orders: SolveRequestOrder[]; }
+interface SolveRequest { orders: SolveRequestOrder[]; }
 interface SolveResponse { solutions: { clearingPrices: Record<string, string>; orders: SolveResponseOrder[]; surplusFeeInfo: ApiSurplusFeeInfo; }[]; }
 interface Interaction { target: string; value: bigint; callData: string; }
 
@@ -89,11 +89,11 @@ function computeCustomPrices(eS: bigint, eB: bigint, cis: ApiCommissionInfo[], s
 // buildSettleCalldata
 // ═══════════════════════════════════════════════════════════════════════════
 
-function buildSettleCalldata(request: SolveRequest, response: SolveResponse, interactions: [Interaction[], Interaction[], Interaction[]]) {
+function buildSettleCalldata(request: SolveRequest, response: SolveResponse, settleIdInput: string | bigint, interactions: [Interaction[], Interaction[], Interaction[]]) {
   const solution = response.solutions[0];
   if (!solution) throw new Error('No solutions');
   if (request.orders.length !== solution.orders.length) throw new Error('Order count mismatch');
-  const settleId = BigInt(request.auctionId);
+  const settleId = BigInt(settleIdInput);
   const seen = new Set<string>();
   const tradeTokens: string[] = [];
   for (const o of request.orders) {
@@ -149,8 +149,9 @@ const SETTLEMENT = '0x1a34E1e604D8a55405172C0717B17F7631d5f265';
 const FROM_ADDR  = '0xaFe9d55A5a4e90bBBabBa0327BF72196B5683596';
 const RPC_URL    = 'https://eth.api.pocket.network';
 
+const settleId = '16991079005141248';
+
 const request: SolveRequest = {
-  auctionId: '16991078998390016',
   orders: [{
     fromTokenAddress: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
     toTokenAddress:   '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
@@ -203,7 +204,7 @@ const interactions: [Interaction[], Interaction[], Interaction[]] = [
 // ═══════════════════════════════════════════════════════════════════════════
 
 console.log('=== Building Settlement.settle() Calldata ===\n');
-const result = buildSettleCalldata(request, response, interactions);
+const result = buildSettleCalldata(request, response, settleId, interactions);
 
 console.log('settleId:', result.settleId.toString());
 console.log('tokens:', result.tokens);

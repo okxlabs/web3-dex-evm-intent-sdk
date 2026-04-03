@@ -62,12 +62,14 @@ export interface BuildSettleCalldataResult {
  *
  * @param request - /solve request body
  * @param response - /solve response body
- * @param options - Optional configuration
+ * @param settleId - settleId from /settle callback, used as first parameter to Settlement.settle() on-chain
+ * @param options - Optional configuration (interactions, solutionIndex, useComputedPrices)
  * @returns Hex-encoded calldata string (0x-prefixed)
  */
 export function buildSettleCalldata(
   request: SolveRequest,
   response: SolveResponse,
+  settleId: string | bigint,
   options?: BuildSettleCalldataOptions
 ): BuildSettleCalldataResult {
   const solutionIndex = options?.solutionIndex ?? 0;
@@ -91,8 +93,8 @@ export function buildSettleCalldata(
     );
   }
 
-  // Step 1: settleId from auctionId
-  const settleId = BigInt(request.auctionId);
+  // Step 1: settleId from parameter
+  const sid = BigInt(settleId);
 
   // Step 2: Collect trade token addresses (ordered, deduplicated)
   const tradeTokens = collectTokenAddresses(request.orders);
@@ -207,7 +209,7 @@ export function buildSettleCalldata(
   };
 
   const calldata = iface.encodeFunctionData('settle', [
-    settleId.toString(),
+    sid.toString(),
     tokens,
     clearingPrices.map((p) => p.toString()),
     tradeTuples,
@@ -218,7 +220,7 @@ export function buildSettleCalldata(
   return {
     calldata,
     params: {
-      settleId,
+      settleId: sid,
       tokens,
       clearingPrices,
       trades,

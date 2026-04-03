@@ -14,6 +14,8 @@ export type {
   ApiSurplusFeeInfo,
   ClearingPrices,
   Solution,
+  SettleInfo,
+  SettleRequest,
 } from './types.js';
 
 // Constants

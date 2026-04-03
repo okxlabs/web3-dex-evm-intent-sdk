@@ -16,7 +16,7 @@ If `$ARGUMENTS` is a `0x`-prefixed hex string, run the full verification pipelin
 
 ```
 original calldata
-  → reconstructFromCalldata()  → { request, response, interactions }
+  → reconstructFromCalldata()  → { settleId, request, response, interactions }
   → buildSettleCalldata()      → re-encoded calldata
   → compare original vs re-encoded
 ```
@@ -32,13 +32,13 @@ import {
 
 const originalCalldata = '0x...';
 
-const { request, response, interactions } = reconstructFromCalldata(originalCalldata);
+const { settleId, request, response, interactions } = reconstructFromCalldata(originalCalldata);
 ```
 
 ## Step 2: Re-Encode
 
 ```typescript
-const reEncoded = buildSettleCalldata(request, response, {
+const reEncoded = buildSettleCalldata(request, response, settleId, {
   interactions,
   useComputedPrices: true,
 });
@@ -194,10 +194,10 @@ function verifyCalldata(calldata: string): void {
   console.log('=== Calldata Verification ===\n');
   console.log(`Input: ${(calldata.length - 2) / 2} bytes\n`);
 
-  const { request, response, interactions } = reconstructFromCalldata(calldata);
-  console.log(`Reconstructed: auctionId=${request.auctionId}, orders=${request.orders.length}`);
+  const { settleId, request, response, interactions } = reconstructFromCalldata(calldata);
+  console.log(`Reconstructed: settleId=${settleId}, orders=${request.orders.length}`);
 
-  const reEncoded = buildSettleCalldata(request, response, {
+  const reEncoded = buildSettleCalldata(request, response, settleId, {
     interactions,
     useComputedPrices: true,
   });

@@ -207,6 +207,9 @@ function recoverExecutedAmounts(
  * Result of reconstructing API-level objects from calldata.
  */
 export interface ReconstructFromCalldataResult {
+  /** settleId decoded from calldata (first param of Settlement.settle()) */
+  settleId: bigint;
+  /** Reconstructed /solve request */
   request: SolveRequest;
   response: SolveResponse;
   interactions: [Interaction[], Interaction[], Interaction[]];
@@ -303,8 +306,8 @@ export function reconstructFromCalldata(calldata: string): ReconstructFromCallda
   });
 
   return {
+    settleId: decoded.settleId,
     request: {
-      auctionId: decoded.settleId.toString(),
       orders: requestOrders,
     },
     response: {
